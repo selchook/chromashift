@@ -11,12 +11,12 @@ export const COLORS: number[] = [
   0xe74c3c, // red
   0x3498db, // blue
   0x2ecc71, // green
-  0xf39c12, // orange
+  0xffd200, // yellow
   0x9b59b6, // purple
   0xff2d78  // pink
 ];
 
-export const COLOR_NAMES: string[] = ['red', 'blue', 'green', 'orange', 'purple', 'pink'];
+export const COLOR_NAMES: string[] = ['red', 'blue', 'green', 'yellow', 'purple', 'pink'];
 
 export const BG_COLOR = 0x0a0a1a;
 export const HIGHLIGHT_COLOR = 0xe94560;
