@@ -1,0 +1,8 @@
+```
+node_modules/
+dist/
+.env
+*.keystore
+.DS_Store
+*.local
+```
