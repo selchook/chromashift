@@ -15,6 +15,8 @@ export class GameScene extends Phaser.Scene {
   private selectionPulseTween: Phaser.Tweens.Tween | null = null;
   private gameState!: GameState;
   private isResolving: boolean = false;
+  private pointerDownX: number = 0;
+  private pointerDownY: number = 0;
   private gridGraphics!: Phaser.GameObjects.Graphics;
   private selectionGraphics!: Phaser.GameObjects.Graphics;
   private particleGraphics!: Phaser.GameObjects.Graphics;
@@ -68,7 +70,13 @@ export class GameScene extends Phaser.Scene {
     this.dropInAllTiles();
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      this.pointerDownX = pointer.x;
+      this.pointerDownY = pointer.y;
       this.handlePointerDown(pointer.x, pointer.y);
+    });
+
+    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      this.handlePointerUp(pointer.x, pointer.y);
     });
 
     if (this.input.keyboard) {
@@ -308,6 +316,34 @@ export class GameScene extends Phaser.Scene {
         if (c) this.tweens.add({ targets: c, scaleX: 1.18, scaleY: 0.88, duration: 60, yoyo: true, ease: 'Sine.easeInOut' });
       }
     }
+  }
+
+  private handlePointerUp(px: number, py: number): void {
+    if (this.isResolving || this.gameState.isGameOver) return;
+
+    const dx = px - this.pointerDownX;
+    const dy = py - this.pointerDownY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const SWIPE_THRESHOLD = 20;
+
+    if (dist < SWIPE_THRESHOLD) return; // tap, already handled by pointerdown
+
+    const col = Math.floor((this.pointerDownX - GRID_OFFSET_X) / CELL_SIZE);
+    const row = Math.floor((this.pointerDownY - GRID_OFFSET_Y) / CELL_SIZE);
+    if (row < 0 || row >= GRID_ROWS || col < 0 || col >= GRID_COLS || !this.grid[row][col]) return;
+
+    let dr = 0, dc = 0;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      dc = dx > 0 ? 1 : -1;
+    } else {
+      dr = dy > 0 ? 1 : -1;
+    }
+
+    const r2 = row + dr, c2 = col + dc;
+    if (r2 < 0 || r2 >= GRID_ROWS || c2 < 0 || c2 >= GRID_COLS || !this.grid[r2][c2]) return;
+
+    this.clearSelection();
+    this.swapTiles(row, col, r2, c2);
   }
 
   // ─── Swap ─────────────────────────────────────────────────────────────────
@@ -693,6 +729,7 @@ export class GameScene extends Phaser.Scene {
     this.particles = [];
     if (this.selectionPulseTween) { this.selectionPulseTween.stop(); this.selectionPulseTween = null; }
     this.input.off('pointerdown');
+    this.input.off('pointerup');
     for (let row = 0; row < GRID_ROWS; row++) {
       for (let col = 0; col < GRID_COLS; col++) {
         this.tileContainers[row]?.[col]?.destroy();
