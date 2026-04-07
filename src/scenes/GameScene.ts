@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import {
   SCENES, BG_COLOR, COLORS, GRID_COLS, GRID_ROWS, CELL_SIZE,
-  GRID_OFFSET_X, GRID_OFFSET_Y, MATCH_MIN, BASE_SCORE,
+  MATCH_MIN, BASE_SCORE,
   COMBO_MULTIPLIER, STORAGE_KEY, CHROMASHIFT_INTERVAL
 } from '../constants';
 import { AudioManager } from '../managers/AudioManager';
@@ -26,20 +26,26 @@ export class GameScene extends Phaser.Scene {
   }> = [];
   private totalClears: number = 0;
   private paletteShift: number = 0;
+  private gridOffsetX: number = 0;
+  private gridOffsetY: number = 0;
 
   constructor() {
     super({ key: SCENES.GAME });
   }
 
   private tileX(col: number): number {
-    return GRID_OFFSET_X + col * CELL_SIZE + CELL_SIZE / 2;
+    return this.gridOffsetX + col * CELL_SIZE + CELL_SIZE / 2;
   }
 
   private tileY(row: number): number {
-    return GRID_OFFSET_Y + row * CELL_SIZE + CELL_SIZE / 2;
+    return this.gridOffsetY + row * CELL_SIZE + CELL_SIZE / 2;
   }
 
   create(): void {
+    const HUD_HEIGHT = 80;
+    this.gridOffsetX = Math.floor((this.scale.width - GRID_COLS * CELL_SIZE) / 2);
+    this.gridOffsetY = HUD_HEIGHT + Math.max(0, Math.floor((this.scale.height - HUD_HEIGHT - GRID_ROWS * CELL_SIZE) / 2));
+
     this.cameras.main.setBackgroundColor(BG_COLOR);
     this.cameras.main.fadeIn(400, 0, 0, 0);
 
@@ -139,13 +145,13 @@ export class GameScene extends Phaser.Scene {
     // Outer glow/shadow
     this.gridGraphics.fillStyle(0x000000, 0.5);
     this.gridGraphics.fillRoundedRect(
-      GRID_OFFSET_X - 2, GRID_OFFSET_Y + 5,
+      this.gridOffsetX - 2, this.gridOffsetY + 5,
       GRID_COLS * CELL_SIZE + 8, GRID_ROWS * CELL_SIZE + 8, 10
     );
     // Board background
     this.gridGraphics.fillStyle(0x0c0c26, 1);
     this.gridGraphics.fillRoundedRect(
-      GRID_OFFSET_X - 4, GRID_OFFSET_Y - 4,
+      this.gridOffsetX - 4, this.gridOffsetY - 4,
       GRID_COLS * CELL_SIZE + 8, GRID_ROWS * CELL_SIZE + 8, 10
     );
     // Subtle cell slots
@@ -153,8 +159,8 @@ export class GameScene extends Phaser.Scene {
       for (let col = 0; col < GRID_COLS; col++) {
         this.gridGraphics.fillStyle(0x111130, 1);
         this.gridGraphics.fillRoundedRect(
-          GRID_OFFSET_X + col * CELL_SIZE + 3,
-          GRID_OFFSET_Y + row * CELL_SIZE + 3,
+          this.gridOffsetX + col * CELL_SIZE + 3,
+          this.gridOffsetY + row * CELL_SIZE + 3,
           CELL_SIZE - 6, CELL_SIZE - 6, 6
         );
       }
@@ -221,7 +227,7 @@ export class GameScene extends Phaser.Scene {
   private dropInAllTiles(): void {
     for (let col = 0; col < GRID_COLS; col++) {
       for (let row = 0; row < GRID_ROWS; row++) {
-        const startY = GRID_OFFSET_Y - CELL_SIZE * (row + 2);
+        const startY = this.gridOffsetY - CELL_SIZE * (row + 2);
         const container = this.createTileContainer(row, col, startY);
         container.setScale(0.6).setAlpha(0);
         this.tileContainers[row][col] = container;
@@ -259,8 +265,8 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Bright ring + soft outer glow
-    const x = GRID_OFFSET_X + col * CELL_SIZE;
-    const y = GRID_OFFSET_Y + row * CELL_SIZE;
+    const x = this.gridOffsetX + col * CELL_SIZE;
+    const y = this.gridOffsetY + row * CELL_SIZE;
     this.selectionGraphics.lineStyle(2.5, 0xffffff, 1);
     this.selectionGraphics.strokeRoundedRect(x + 3, y + 3, CELL_SIZE - 6, CELL_SIZE - 6, 7);
     this.selectionGraphics.lineStyle(8, 0xffffff, 0.18);
@@ -282,8 +288,8 @@ export class GameScene extends Phaser.Scene {
   private handlePointerDown(px: number, py: number): void {
     if (this.isResolving || this.gameState.isGameOver) return;
 
-    const col = Math.floor((px - GRID_OFFSET_X) / CELL_SIZE);
-    const row = Math.floor((py - GRID_OFFSET_Y) / CELL_SIZE);
+    const col = Math.floor((px - this.gridOffsetX) / CELL_SIZE);
+    const row = Math.floor((py - this.gridOffsetY) / CELL_SIZE);
 
     if (row < 0 || row >= GRID_ROWS || col < 0 || col >= GRID_COLS || !this.grid[row][col]) {
       this.clearSelection();
@@ -328,8 +334,8 @@ export class GameScene extends Phaser.Scene {
 
     if (dist < SWIPE_THRESHOLD) return; // tap, already handled by pointerdown
 
-    const col = Math.floor((this.pointerDownX - GRID_OFFSET_X) / CELL_SIZE);
-    const row = Math.floor((this.pointerDownY - GRID_OFFSET_Y) / CELL_SIZE);
+    const col = Math.floor((this.pointerDownX - this.gridOffsetX) / CELL_SIZE);
+    const row = Math.floor((this.pointerDownY - this.gridOffsetY) / CELL_SIZE);
     if (row < 0 || row >= GRID_ROWS || col < 0 || col >= GRID_COLS || !this.grid[row][col]) return;
 
     let dr = 0, dc = 0;
@@ -608,7 +614,7 @@ export class GameScene extends Phaser.Scene {
         if (!this.tileContainers[row][col] && this.grid[row][col]) {
           pending++;
           // Start above the grid, staggered by spawn index within column
-          const startY = GRID_OFFSET_Y - CELL_SIZE * (spawnIdx + 1);
+          const startY = this.gridOffsetY - CELL_SIZE * (spawnIdx + 1);
           const container = this.createTileContainer(row, col, startY);
           container.setScale(0.4).setAlpha(0.5);
           this.tileContainers[row][col] = container;
