@@ -15,20 +15,21 @@ export class HUDScene extends Phaser.Scene {
 
   create(): void {
     const cx = GAME_WIDTH / 2;
+    const right = this.scale.width - 16;
 
     // Score
-    this.scoreText = this.add.text(cx, 20, 'Score: 0', {
+    this.scoreText = this.add.text(right, 16, 'Score: 0', {
       fontSize: '20px',
       fontFamily: 'Arial Black, Arial',
       color: '#ffffff'
-    }).setOrigin(0.5, 0);
+    }).setOrigin(1, 0);
 
     // High score
-    this.highScoreText = this.add.text(cx, 44, 'Best: 0', {
+    this.highScoreText = this.add.text(right, 40, 'Best: 0', {
       fontSize: '13px',
       fontFamily: 'Arial',
       color: '#FFD700'
-    }).setOrigin(0.5, 0);
+    }).setOrigin(1, 0);
 
     // Moves
     this.movesText = this.add.text(20, 20, 'Moves: 0/30', {
