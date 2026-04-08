@@ -29,6 +29,8 @@ export class GameScene extends Phaser.Scene {
   private gridOffsetX: number = 0;
   private gridOffsetY: number = 0;
   private bgGraphics!: Phaser.GameObjects.Graphics;
+  private landmarkGraphics!: Phaser.GameObjects.Graphics;
+  private bgImage?: Phaser.GameObjects.Image;
   private locationText!: Phaser.GameObjects.Text;
 
   constructor() {
@@ -69,7 +71,8 @@ export class GameScene extends Phaser.Scene {
     this.particles = [];
 
     // Layer order via depth
-    this.bgGraphics = this.add.graphics().setDepth(-5);
+    this.bgGraphics      = this.add.graphics().setDepth(-5);
+    this.landmarkGraphics = this.add.graphics().setDepth(-3);
     this.gridGraphics = this.add.graphics().setDepth(0);
     this.selectionGraphics = this.add.graphics().setDepth(20);
     this.particleGraphics = this.add.graphics().setDepth(30);
@@ -930,16 +933,59 @@ export class GameScene extends Phaser.Scene {
     'Stonehenge · England'
   ];
 
+  /** Sky config per level: [skyTop, skyHorizon, groundColor] */
+  private static readonly LEVEL_SKY: [number, number, number][] = [
+    [0x1a0830, 0xff6600, 0x0a0418],  // Paris dusk
+    [0x1a0800, 0xff8800, 0xc8780a],  // Egypt dawn
+    [0x060418, 0xffcc44, 0x1a0e04],  // India golden hour
+    [0x04122a, 0x2288dd, 0x1a0e02],  // Rome afternoon
+    [0x06101a, 0x5588aa, 0x0c1a0a],  // China morning mist
+    [0x04080a, 0x226644, 0x0c1a0c],  // Peru jungle
+    [0x080418, 0x3366cc, 0x180e04],  // Athens dusk
+    [0x08041a, 0xcc3300, 0x0a0808],  // Mexico sunset
+    [0x0c0400, 0xff9900, 0x0a0600],  // Cambodia dawn
+    [0x080a18, 0x445577, 0x0a0c0a],  // England twilight
+  ];
+
   private drawBackground(level: number): void {
     this.bgGraphics.clear();
+    this.landmarkGraphics.clear();
     const W  = this.scale.width;
     const H  = this.scale.height;
     const cx = W / 2;
-    const gy = Math.round(H * 0.72); // ground line
+    const gy = Math.round(H * 0.72);
     const idx = (level - 1) % 10;
 
+    if (idx === 0 && this.textures.exists('bg_eiffel')) {
+      // Level 1 — use real photo, cover-fit to fill canvas
+      if (!this.bgImage) {
+        this.bgImage = this.add.image(cx, H / 2, 'bg_eiffel').setDepth(-6);
+      } else {
+        this.bgImage.setPosition(cx, H / 2).setVisible(true);
+      }
+      const tex = this.textures.get('bg_eiffel').getSourceImage() as HTMLImageElement;
+      const scale = Math.max(W / tex.width, H / tex.height);
+      this.bgImage.setScale(scale);
+
+      // Dark overlay for readability
+      this.bgGraphics.fillStyle(0x000000, 0.45);
+      this.bgGraphics.fillRect(0, 0, W, H);
+    } else {
+      // Hide photo if switching away from level 1
+      if (this.bgImage) this.bgImage.setVisible(false);
+
+      // ① Sky gradient on bgGraphics
+      const [skyTop, skyHorizon, skyGround] = GameScene.LEVEL_SKY[idx];
+      this.bgSky(skyTop, skyHorizon, skyGround, W, H, gy);
+
+      // ② Dark overlay on bgGraphics — dims the sky only
+      this.bgGraphics.fillStyle(0x000000, 0.38);
+      this.bgGraphics.fillRect(0, 0, W, H);
+    }
+
+    // ③ Landmark silhouettes on landmarkGraphics — drawn ABOVE the overlay
     switch (idx) {
-      case 0: this.bgEiffelTower(W, H, cx, gy); break;
+      case 0: /* photo replaces procedural silhouette */ break;
       case 1: this.bgPyramids(W, H, cx, gy);    break;
       case 2: this.bgTajMahal(W, H, cx, gy);    break;
       case 3: this.bgColosseum(W, H, cx, gy);   break;
@@ -951,26 +997,22 @@ export class GameScene extends Phaser.Scene {
       default: this.bgStonehenge(W, H, cx, gy); break;
     }
 
-    // Uniform dark overlay so the grid and tiles stay readable
-    this.bgGraphics.fillStyle(0x000000, 0.42);
-    this.bgGraphics.fillRect(0, 0, W, H);
-
-    // Fade-in location label at bottom
+    // ④ Location label
     this.locationText.setText(GameScene.LOCATIONS[idx]);
     this.locationText.setAlpha(0);
     this.tweens.add({
-      targets: this.locationText, alpha: 0.60,
+      targets: this.locationText, alpha: 0.65,
       duration: 700, delay: 300,
       yoyo: true, hold: 2200
     });
   }
 
-  /** Smooth sky gradient: topColor → horizonColor, plus solid ground fill. */
+  /** Sky gradient on bgGraphics (stays behind overlay). */
   private bgSky(topHex: number, horizHex: number, groundHex: number, W: number, H: number, gy: number): void {
     const g  = this.bgGraphics;
     const tc = Phaser.Display.Color.IntegerToColor(topHex);
     const hc = Phaser.Display.Color.IntegerToColor(horizHex);
-    const BANDS = 12;
+    const BANDS = 14;
     for (let i = 0; i <= BANDS; i++) {
       const t  = i / BANDS;
       const rv = Math.round(tc.red   + (hc.red   - tc.red)   * t);
@@ -986,319 +1028,418 @@ export class GameScene extends Phaser.Scene {
 
   // ── 1. Eiffel Tower — Paris dusk ──────────────────────────────────────────
   private bgEiffelTower(W: number, H: number, cx: number, gy: number): void {
-    const g = this.bgGraphics;
-    this.bgSky(0x0e0520, 0xcc3300, 0x06030e, W, H, gy);
-    const s = 0x040110;
-    const th = Math.min(H * 0.42, 260); // tower height
+    const g  = this.landmarkGraphics;
+    const s  = 0x2a1840;  // dark blue-purple silhouette
+    const th = Math.min(H * 0.44, 270);
 
-    // City skyline blobs
+    // Horizon glow bleed
+    g.fillStyle(0xff6600, 0.18);
+    g.fillRect(0, gy - H*0.10, W, H*0.10);
+
+    // City skyline (flat roofline left & right)
     g.fillStyle(s, 1);
-    g.fillRect(0,          gy - H*0.06, W*0.18, H*0.06);
-    g.fillRect(W*0.75,     gy - H*0.05, W*0.25, H*0.05);
-    g.fillRect(cx - W*0.35, gy - H*0.04, W*0.14, H*0.04);
+    g.fillRect(0,            gy - H*0.08, W*0.22, H*0.08);
+    g.fillRect(W*0.72,       gy - H*0.07, W*0.28, H*0.07);
+    g.fillRect(cx - W*0.38,  gy - H*0.05, W*0.16, H*0.05);
+    g.fillRect(cx + W*0.12,  gy - H*0.04, W*0.10, H*0.04);
 
-    // Eiffel Tower
-    g.fillStyle(s, 1);
-    // Legs — two spread triangles
-    g.fillTriangle(cx - 30, gy, cx - 4, gy - th*0.50, cx + 4, gy - th*0.50);
-    g.fillTriangle(cx + 30, gy, cx + 4, gy - th*0.50, cx - 4, gy - th*0.50);
-    // First-floor cross beam
-    g.fillRect(cx - 25, gy - th*0.12, 50, 5);
-    // Second-floor cross beam
-    g.fillRect(cx - 12, gy - th*0.50, 24, 4);
-    // Mid-section
-    g.fillRect(cx - 5, gy - th*0.75, 10, th*0.25);
-    // Upper cross beam
-    g.fillRect(cx - 8, gy - th*0.77, 16, 3);
-    // Top spire
-    g.fillRect(cx - 2, gy - th, 4, th*0.25);
-    // Antenna
-    g.fillRect(Math.round(cx) - 1, gy - th*1.12, 2, th*0.12);
+    // Ground mass
+    g.fillRect(0, gy, W, H - gy);
 
-    // Warm glow at horizon
-    g.fillStyle(0xff6600, 0.12);
-    g.fillRect(0, gy - H*0.08, W, H*0.08);
+    // ── Eiffel Tower ──
+    // Legs (two filled triangles spreading from base)
+    g.fillTriangle(cx - 32, gy, cx - 5, gy - th*0.50, cx + 5, gy - th*0.50);
+    g.fillTriangle(cx + 32, gy, cx + 5, gy - th*0.50, cx - 5, gy - th*0.50);
+    // First-floor horizontal beam
+    g.fillRect(cx - 28, gy - th*0.13, 56, 6);
+    // Mid body
+    g.fillRect(cx - 7,  gy - th*0.75, 14, th*0.25);
+    // Second-floor beam
+    g.fillRect(cx - 13, gy - th*0.52, 26, 5);
+    // Upper slim body
+    g.fillRect(cx - 4,  gy - th*0.90, 8, th*0.15);
+    // Cross strut
+    g.fillRect(cx - 9,  gy - th*0.78, 18, 4);
+    // Spire
+    g.fillRect(cx - 2,  gy - th*1.05, 4, th*0.15);
+    // Antenna needle
+    g.fillRect(Math.round(cx) - 1, gy - th*1.18, 2, th*0.13);
+
+    // Subtle lattice lines on legs (lighter tint)
+    g.fillStyle(0x44306a, 0.55);
+    g.fillRect(cx - 20, gy - th*0.08, 6, th*0.40);
+    g.fillRect(cx + 14,  gy - th*0.08, 6, th*0.40);
   }
 
   // ── 2. Pyramids of Giza — Egyptian dawn ───────────────────────────────────
   private bgPyramids(W: number, H: number, cx: number, gy: number): void {
-    const g = this.bgGraphics;
-    this.bgSky(0x0a0400, 0xff7700, 0xb87010, W, H, gy);
-    const s = 0x3d2000;
+    const g = this.landmarkGraphics;
+    const s = 0x5a3a08;  // warm dark amber
 
-    // Great Pyramid (centre)
-    g.fillStyle(s, 1);
-    g.fillTriangle(cx - 80, gy, cx, gy - H*0.32, cx + 80, gy);
-    // Second pyramid (right)
-    g.fillTriangle(cx + 55, gy, cx + 130, gy - H*0.24, cx + 200, gy);
-    // Third pyramid (left, small)
-    g.fillTriangle(cx - 200, gy, cx - 130, gy - H*0.16, cx - 60, gy);
-    // Sphinx silhouette (low elongated shape left of centre)
-    g.fillRect(cx - 55, gy - H*0.07, 40, H*0.07);
-    g.fillEllipse(cx - 20, gy - H*0.09, 28, 22);
-    // Sand dunes
-    g.fillStyle(0x8b5e00, 1);
-    g.fillRect(0, gy, W, H - gy);
     // Horizon glow
-    g.fillStyle(0xff9900, 0.15);
-    g.fillRect(0, gy - H*0.06, W, H*0.06);
+    g.fillStyle(0xff8800, 0.22);
+    g.fillRect(0, gy - H*0.08, W, H*0.08);
+
+    // Sandy ground
+    g.fillStyle(0x9a6a10, 1);
+    g.fillRect(0, gy, W, H - gy);
+    g.fillStyle(0xb87a18, 0.50);
+    g.fillRect(0, gy, W, 10);
+
+    g.fillStyle(s, 1);
+    // Great Pyramid (centre, tallest)
+    g.fillTriangle(cx - 85, gy, cx, gy - H*0.34, cx + 85, gy);
+    // Highlight face (lighter left face)
+    g.fillStyle(0x7a5010, 0.55);
+    g.fillTriangle(cx - 85, gy, cx, gy - H*0.34, cx, gy);
+    // Second pyramid (right)
+    g.fillStyle(s, 1);
+    g.fillTriangle(cx + 50, gy, cx + 128, gy - H*0.25, cx + 200, gy);
+    // Third pyramid (distant left)
+    g.fillTriangle(cx - 200, gy, cx - 120, gy - H*0.17, cx - 55, gy);
+    // Sphinx body
+    g.fillRect(cx - 60, gy - H*0.075, 48, H*0.075);
+    g.fillEllipse(cx - 18, gy - H*0.10, 32, 24);  // head
+    // Dunes
+    g.fillStyle(0x7a5008, 0.45);
+    g.fillEllipse(W*0.15, gy + 8, 140, 28);
+    g.fillEllipse(W*0.75, gy + 5, 110, 22);
   }
 
   // ── 3. Taj Mahal — golden hour ─────────────────────────────────────────────
   private bgTajMahal(W: number, H: number, cx: number, gy: number): void {
-    const g = this.bgGraphics;
-    this.bgSky(0x050212, 0xddaa00, 0x180e00, W, H, gy);
-    const s = 0x100800;
+    const g = this.landmarkGraphics;
+    const s = 0x3a2c10;  // dark warm stone
 
-    // Reflection pool
-    g.fillStyle(0xddaa00, 0.10);
-    g.fillRect(cx - 55, gy, 110, H*0.06);
+    // Horizon glow
+    g.fillStyle(0xffcc44, 0.20);
+    g.fillRect(0, gy - H*0.08, W, H*0.08);
+
+    // Ground + reflection pool shimmer
+    g.fillStyle(0x1e1408, 1);
+    g.fillRect(0, gy, W, H - gy);
+    g.fillStyle(0xffcc44, 0.14);
+    g.fillRect(cx - 60, gy + 4, 120, H*0.05);  // pool reflection
 
     g.fillStyle(s, 1);
-    // Platform base
-    g.fillRect(cx - 62, gy - H*0.04, 124, H*0.04);
+    // Outer platform (lowest)
+    g.fillRect(cx - 70, gy - H*0.05, 140, H*0.05);
+    // Inner terrace / plinth
+    g.fillRect(cx - 50, gy - H*0.12, 100, H*0.07);
     // Main building body
-    g.fillRect(cx - 42, gy - H*0.14, 84, H*0.10);
-    // Central dome (semicircle)
-    g.beginPath(); g.arc(cx, gy - H*0.14, 30, -Math.PI, 0); g.closePath(); g.fillPath();
-    // Dome finial
-    g.fillRect(cx - 2, gy - H*0.14 - 38, 4, 14);
-    // Four corner minarets
-    for (const mx of [cx - 62, cx - 50, cx + 50, cx + 62]) {
-      g.fillRect(mx - 5, gy - H*0.26, 10, H*0.22);
-      g.beginPath(); g.arc(mx, gy - H*0.26, 7, -Math.PI, 0); g.closePath(); g.fillPath();
+    g.fillRect(cx - 38, gy - H*0.22, 76, H*0.10);
+    // Central onion dome
+    g.beginPath(); g.arc(cx, gy - H*0.22, 28, -Math.PI, 0); g.closePath(); g.fillPath();
+    g.fillRect(cx - 5, gy - H*0.22 - 32, 10, 10);   // drum neck
+    g.fillRect(cx - 2, gy - H*0.22 - 42, 4, 12);    // finial
+
+    // Four minarets (slim, tall, with small domes)
+    for (const mx of [cx - 58, cx - 46, cx + 46, cx + 58]) {
+      g.fillRect(mx - 5, gy - H*0.32, 10, H*0.20);
+      g.beginPath(); g.arc(mx, gy - H*0.32, 7, -Math.PI, 0); g.closePath(); g.fillPath();
+      g.fillRect(mx - 1, gy - H*0.32 - 10, 2, 10);  // minaret spire
     }
-    // Flanking pavilions
-    g.fillRect(cx - 38, gy - H*0.08, 16, H*0.04);
-    g.fillRect(cx + 22, gy - H*0.08, 16, H*0.04);
-    g.beginPath(); g.arc(cx - 30, gy - H*0.08, 8, -Math.PI, 0); g.closePath(); g.fillPath();
-    g.beginPath(); g.arc(cx + 30, gy - H*0.08, 8, -Math.PI, 0); g.closePath(); g.fillPath();
+    // Flanking pavilion domes
+    for (const px of [cx - 32, cx + 22]) {
+      g.fillRect(px, gy - H*0.16, 18, H*0.04);
+      g.beginPath(); g.arc(px + 9, gy - H*0.16, 9, -Math.PI, 0); g.closePath(); g.fillPath();
+    }
+
+    // Highlight: lighter tone on dome face
+    g.fillStyle(0x6a5028, 0.40);
+    g.beginPath(); g.arc(cx, gy - H*0.22, 18, -Math.PI*0.85, -Math.PI*0.15); g.strokePath();
+    g.fillStyle(0x6a5028, 0.25);
+    g.beginPath(); g.arc(cx, gy - H*0.22, 28, -Math.PI, -Math.PI*0.6); g.closePath(); g.fillPath();
   }
 
   // ── 4. Colosseum — Roman afternoon ─────────────────────────────────────────
   private bgColosseum(W: number, H: number, cx: number, gy: number): void {
-    const g = this.bgGraphics;
-    this.bgSky(0x04091a, 0x1155aa, 0x1a0e00, W, H, gy);
-    const s = 0x120900;
-    const bH = H*0.28; // building height
+    const g  = this.landmarkGraphics;
+    const s  = 0x3a2808;  // warm dark travertine
+    const bH = H * 0.30;
 
+    g.fillStyle(0x1a1004, 1);
+    g.fillRect(0, gy, W, H - gy);
+
+    // Three tiers of the exterior wall
     g.fillStyle(s, 1);
-    // Main oval structure — three tiers
-    // Ground tier (widest)
-    g.fillRect(cx - 80, gy - bH*0.33, 160, bH*0.33);
-    // Second tier
-    g.fillRect(cx - 72, gy - bH*0.66, 144, bH*0.33);
-    // Third tier
-    g.fillRect(cx - 62, gy - bH, 124, bH*0.34);
+    g.fillRect(cx - 82, gy - bH*0.34, 164, bH*0.34);  // ground tier
+    g.fillRect(cx - 74, gy - bH*0.67, 148, bH*0.33);  // second tier
+    g.fillRect(cx - 65, gy - bH,      130, bH*0.33);  // third tier
+    // Attic wall (solid — no arches)
+    g.fillRect(cx - 58, gy - bH*1.18, 116, bH*0.18);
 
-    // Arched openings — ground tier (sky colour punched through)
-    const skyMid = Phaser.Display.Color.IntegerToColor(0x1155aa);
-    g.fillStyle(Phaser.Display.Color.GetColor(skyMid.red, skyMid.green, skyMid.blue), 1);
+    // Arched openings cut through each tier using a slightly different colour
+    const openColor = 0x1a1004;
+    g.fillStyle(openColor, 1);
+    // Ground tier — 8 arches
     for (let i = 0; i < 8; i++) {
-      const ax = cx - 72 + i * 18 + 2;
-      g.fillRoundedRect(ax, gy - bH*0.30, 13, bH*0.22, 6);
+      const ax = cx - 74 + i * 19 + 2;
+      g.fillRoundedRect(ax, gy - bH*0.31, 14, bH*0.22, 7);
     }
-    // Second tier openings
+    // Second tier — 7 arches
+    for (let i = 0; i < 7; i++) {
+      const ax = cx - 62 + i * 18 + 2;
+      g.fillRoundedRect(ax, gy - bH*0.64, 13, bH*0.22, 6);
+    }
+    // Third tier — 6 windows
     for (let i = 0; i < 6; i++) {
-      const ax = cx - 58 + i * 19 + 2;
-      g.fillRoundedRect(ax, gy - bH*0.62, 14, bH*0.22, 6);
+      const ax = cx - 52 + i * 18 + 2;
+      g.fillRoundedRect(ax, gy - bH*0.97, 12, bH*0.20, 5);
     }
-    // Crumbled top-right section (partial wall)
+
+    // Lighter face on upper-left (catches afternoon light)
+    g.fillStyle(0x6a4818, 0.30);
+    g.fillRect(cx - 82, gy - bH, 42, bH);
+
+    // Crumbled top-right section
     g.fillStyle(s, 1);
-    g.fillRect(cx + 52, gy - bH*1.04, 12, bH*0.38);
+    g.fillRect(cx + 58, gy - bH*1.12, 10, bH*0.28);
   }
 
   // ── 5. Great Wall of China — misty morning ──────────────────────────────────
   private bgGreatWall(W: number, H: number, cx: number, gy: number): void {
-    const g = this.bgGraphics;
-    this.bgSky(0x04080e, 0x335577, 0x0a1008, W, H, gy);
-    const s = 0x050a07;
-    const m = 0x0a120d; // mountain colour
+    const g = this.landmarkGraphics;
+    const s = 0x2a3828;  // dark muted green-grey (wall)
+    const m = 0x182818;  // mountain
 
-    // Mountain ranges (3 layers for depth)
+    // Ground
+    g.fillStyle(0x0e1a0e, 1);
+    g.fillRect(0, gy, W, H - gy);
+
+    // Mountain layers (back to front for depth)
+    g.fillStyle(0x0e1c10, 1);
+    g.fillTriangle(-30, gy, W*0.18, gy - H*0.20, W*0.38, gy);
+    g.fillTriangle(W*0.58, gy, W*0.82, gy - H*0.18, W+30, gy);
     g.fillStyle(m, 1);
-    g.fillTriangle(0, gy, W*0.22, gy - H*0.28, W*0.44, gy);
-    g.fillTriangle(W*0.32, gy, W*0.60, gy - H*0.35, W*0.88, gy);
-    g.fillTriangle(W*0.65, gy, W*0.88, gy - H*0.22, W, gy);
-    g.fillTriangle(-20, gy, W*0.12, gy - H*0.18, W*0.28, gy);
+    g.fillTriangle(0, gy, W*0.22, gy - H*0.30, W*0.46, gy);
+    g.fillTriangle(W*0.30, gy, W*0.58, gy - H*0.37, W*0.86, gy);
+    g.fillTriangle(W*0.62, gy, W*0.88, gy - H*0.24, W, gy);
 
-    // Wall — zigzag following mountain ridges
+    // Wall path (four segments tracing the ridgeline)
     g.fillStyle(s, 1);
-    // Segment 1 (left slope)
-    g.fillRect(0, gy - H*0.14, W*0.22, H*0.025);
-    // Segment 2 (up to first peak)
-    const seg2pts = [
-      {x:W*0.10,y:gy - H*0.14},{x:W*0.22,y:gy - H*0.28},
-      {x:W*0.22 + 12,y:gy - H*0.28},{x:W*0.10 + 12,y:gy - H*0.14}
+    const W12 = 11; // wall width
+    const wSegs: [number,number,number,number][] = [
+      [0, gy - H*0.14,  W*0.22, gy - H*0.30],
+      [W*0.22, gy - H*0.30, W*0.58, gy - H*0.37],
+      [W*0.58, gy - H*0.37, W*0.88, gy - H*0.24],
+      [W*0.88, gy - H*0.24, W, gy - H*0.12],
     ];
-    g.fillPoints(seg2pts, true);
-    // Segment 3 (down to valley, up to second peak)
-    const seg3pts = [
-      {x:W*0.22,y:gy - H*0.28},{x:W*0.60,y:gy - H*0.35},
-      {x:W*0.60 + 12,y:gy - H*0.35},{x:W*0.22 + 12,y:gy - H*0.28}
-    ];
-    g.fillPoints(seg3pts, true);
-    // Segment 4 (right slope down)
-    const seg4pts = [
-      {x:W*0.60,y:gy - H*0.35},{x:W,y:gy - H*0.08},
-      {x:W,y:gy - H*0.08 + 12},{x:W*0.60 + 12,y:gy - H*0.35}
-    ];
-    g.fillPoints(seg4pts, true);
-
-    // Guard towers at key points
-    for (const [tx, ty] of [[W*0.22, gy - H*0.28],[W*0.60, gy - H*0.35],[W*0.88, gy - H*0.22]]) {
-      g.fillRect(tx - 10, ty - H*0.06, 20, H*0.06 + 12);
-      g.fillRect(tx - 12, ty - H*0.07, 24, 7); // battlement cap
+    for (const [x1,y1,x2,y2] of wSegs) {
+      const dx = x2 - x1, dy = y2 - y1;
+      const len = Math.sqrt(dx*dx + dy*dy);
+      const nx = -dy/len * W12, ny = dx/len * W12;
+      g.fillPoints([{x:x1,y:y1},{x:x2,y:y2},{x:x2+nx,y:y2+ny},{x:x1+nx,y:y1+ny}], true);
     }
 
-    // Mist layer
-    g.fillStyle(0x7799bb, 0.07);
-    g.fillRect(0, gy - H*0.22, W, H*0.18);
+    // Guard towers
+    for (const [tx, ty] of [[W*0.22,gy-H*0.30],[W*0.58,gy-H*0.37],[W*0.88,gy-H*0.24]] as [number,number][]) {
+      g.fillRect(tx - 12, ty - H*0.065, 24, H*0.065 + W12);
+      g.fillRect(tx - 14, ty - H*0.075, 28, 8); // battlement cap
+    }
+
+    // Mist overlay
+    g.fillStyle(0x6699bb, 0.10);
+    g.fillRect(0, gy - H*0.25, W, H*0.20);
   }
 
   // ── 6. Machu Picchu — Andean mist ──────────────────────────────────────────
   private bgMachuPicchu(W: number, H: number, cx: number, gy: number): void {
-    const g = this.bgGraphics;
-    this.bgSky(0x020608, 0x1a3322, 0x0a1008, W, H, gy);
-    const s = 0x080d08;
-    const mt = 0x0d1510; // mountain
+    const g  = this.landmarkGraphics;
+    const s  = 0x1e2e1a;  // dark mossy stone
+    const mt = 0x162410;  // mountain green
 
-    // Huayna Picchu peak (right)
+    // Ground
+    g.fillStyle(0x0e180e, 1);
+    g.fillRect(0, gy, W, H - gy);
+
+    // Mountain masses
     g.fillStyle(mt, 1);
-    g.fillTriangle(cx + 20, gy, W, gy - H*0.48, W + 60, gy);
-    // Main mountain mass (left)
-    g.fillTriangle(-60, gy, cx - 10, gy - H*0.40, cx + 30, gy);
+    g.fillTriangle(-40, gy, cx - 5, gy - H*0.42, cx + 28, gy);
+    // Huayna Picchu (iconic pointed peak right)
+    g.fillTriangle(cx + 15, gy, W, gy - H*0.50, W + 50, gy);
+    // Distant range behind
+    g.fillStyle(0x101e0e, 1);
+    g.fillTriangle(-60, gy, W*0.30, gy - H*0.28, W*0.60, gy);
+    g.fillTriangle(W*0.50, gy, W*0.80, gy - H*0.24, W+40, gy);
 
-    // Terraces (horizontal retaining walls cascading down the slope)
+    // Terraces (7 levels cascading left slope)
     g.fillStyle(s, 1);
     for (let i = 0; i < 7; i++) {
-      const tx = cx - 55 + i * 4;
-      const tw = 110 - i * 8;
-      const ty = gy - H*0.10 - i * H*0.045;
-      g.fillRect(tx, ty, tw, 8);
-      g.fillRect(tx, ty, tw, H*0.045 + 8); // terrace face wall
+      const tw = 116 - i * 9;
+      const tx = cx - tw / 2 + i * 3;
+      const ty = gy - H*0.12 - i * H*0.048;
+      g.fillRect(tx, ty,  tw, H*0.048 + 6);  // terrace fill
+      g.fillStyle(0x304828, 0.40);
+      g.fillRect(tx, ty, tw, 5);             // top edge highlight
+      g.fillStyle(s, 1);
     }
 
-    // Main temple / Intihuatana buildings on top
-    g.fillRect(cx - 35, gy - H*0.42, 70, H*0.10);
-    g.fillRect(cx - 28, gy - H*0.50, 56, H*0.08);
-    // Central temple doorway (arch)
-    g.fillRect(cx - 40, gy - H*0.46, 12, H*0.08);
-    g.fillRect(cx + 28, gy - H*0.46, 12, H*0.08);
+    // Temple ruins on summit
+    g.fillRect(cx - 38, gy - H*0.44, 76, H*0.10);
+    g.fillRect(cx - 30, gy - H*0.52, 60, H*0.08);
+    // Wall towers flanking
+    g.fillRect(cx - 46, gy - H*0.50, 12, H*0.18);
+    g.fillRect(cx + 34,  gy - H*0.50, 12, H*0.18);
 
     // Cloud wisps
-    g.fillStyle(0x336655, 0.12);
-    g.fillEllipse(W*0.15, gy - H*0.30, 90, 30);
-    g.fillEllipse(W*0.80, gy - H*0.25, 70, 22);
+    g.fillStyle(0x4a7755, 0.15);
+    g.fillEllipse(W*0.14, gy - H*0.30, 100, 28);
+    g.fillEllipse(W*0.78, gy - H*0.26, 80, 22);
   }
 
   // ── 7. Parthenon — Athenian dusk ────────────────────────────────────────────
   private bgParthenon(W: number, H: number, cx: number, gy: number): void {
-    const g = this.bgGraphics;
-    this.bgSky(0x060210, 0x2244aa, 0x100800, W, H, gy);
-    const s = 0x0c0800;
+    const g = this.landmarkGraphics;
+    const s = 0x3a2e18;  // dark warm marble/limestone
 
-    // Acropolis hill
-    g.fillStyle(0x0f0a04, 1);
-    g.fillTriangle(cx - 140, gy, cx, gy - H*0.15, cx + 140, gy);
+    // Ground / rocky hill
+    g.fillStyle(0x1e1608, 1);
+    g.fillRect(0, gy, W, H - gy);
+    // Acropolis hill mass
+    g.fillStyle(0x2a1e0e, 1);
+    g.fillTriangle(cx - 155, gy, cx, gy - H*0.17, cx + 155, gy);
 
     g.fillStyle(s, 1);
-    // Stepped base (stylobate — 3 steps)
-    g.fillRect(cx - 72, gy - H*0.20, 144, H*0.025);
-    g.fillRect(cx - 68, gy - H*0.225, 136, H*0.025);
-    g.fillRect(cx - 64, gy - H*0.25, 128, H*0.025);
-    // Colonnade — 8 columns
+    // Stylobate — 3 stepped levels
+    g.fillRect(cx - 76, gy - H*0.21, 152, H*0.025);
+    g.fillRect(cx - 70, gy - H*0.235, 140, H*0.025);
+    g.fillRect(cx - 66, gy - H*0.26, 132, H*0.025);
+
+    // 8 front columns (tapered cylinders using rects)
     for (let i = 0; i < 8; i++) {
-      const colX = cx - 56 + i * 16;
-      g.fillRect(colX - 3, gy - H*0.42, 6, H*0.17);
+      const colX = cx - 57 + i * 16;
+      g.fillRect(colX - 4, gy - H*0.44, 8, H*0.18);  // shaft
+      g.fillRect(colX - 5, gy - H*0.46, 10, 5);      // capital
+      g.fillRect(colX - 3, gy - H*0.26, 6, 4);       // base
     }
-    // Entablature (horizontal beam above columns)
-    g.fillRect(cx - 64, gy - H*0.43, 128, H*0.025);
+
+    // Entablature (frieze band)
+    g.fillRect(cx - 66, gy - H*0.46, 132, H*0.03);
     // Pediment (triangular gable)
-    g.fillTriangle(cx - 64, gy - H*0.43, cx, gy - H*0.56, cx + 64, gy - H*0.43);
-    // Opisthodomos columns (back, partially visible)
-    for (let i = 0; i < 4; i++) {
-      const colX = cx - 24 + i * 16;
-      g.fillStyle(0x0a0600, 1);
-      g.fillRect(colX - 2, gy - H*0.40, 4, H*0.15);
+    g.fillTriangle(cx - 66, gy - H*0.46, cx, gy - H*0.60, cx + 66, gy - H*0.46);
+
+    // Column highlight (light face)
+    g.fillStyle(0x6a5428, 0.35);
+    for (let i = 0; i < 8; i++) {
+      const colX = cx - 57 + i * 16;
+      g.fillRect(colX - 2, gy - H*0.44, 3, H*0.18);
+    }
+
+    // Inner opisthodomos columns (partially visible behind front)
+    g.fillStyle(0x2a2010, 1);
+    for (let i = 0; i < 5; i++) {
+      g.fillRect(cx - 32 + i * 16, gy - H*0.42, 5, H*0.16);
     }
   }
 
   // ── 8. Chichen Itza — Mayan twilight ────────────────────────────────────────
   private bgChichenItza(W: number, H: number, cx: number, gy: number): void {
-    const g = this.bgGraphics;
-    this.bgSky(0x050008, 0xaa2200, 0x06030a, W, H, gy);
-    const s = 0x040208;
+    const g = this.landmarkGraphics;
+    const s = 0x302018;  // dark warm limestone
 
-    // Jungle silhouette (tree line)
-    g.fillStyle(0x060a04, 1);
-    for (let x = 0; x < W; x += 28) {
-      const th2 = H*0.08 + Math.sin(x * 0.08) * H*0.04;
-      g.fillTriangle(x, gy, x + 14, gy - th2, x + 28, gy);
+    // Ground
+    g.fillStyle(0x100c08, 1);
+    g.fillRect(0, gy, W, H - gy);
+
+    // Jungle tree-line silhouette
+    g.fillStyle(0x1a200e, 1);
+    for (let x = 0; x < W; x += 26) {
+      const th2 = H*0.10 + Math.sin(x * 0.07) * H*0.04;
+      g.fillTriangle(x, gy, x + 13, gy - th2, x + 26, gy);
     }
 
-    // El Castillo — four-sided stepped pyramid
-    g.fillStyle(s, 1);
+    // Horizon ember glow
+    g.fillStyle(0xcc3300, 0.20);
+    g.fillRect(0, gy - H*0.08, W, H*0.08);
+
+    // El Castillo — 9 tiers + temple
     const tiers = 9;
+    const tierH = H * 0.026;
+    const baseY = gy - H*0.07;
+    g.fillStyle(s, 1);
     for (let i = 0; i < tiers; i++) {
-      const tw = 130 - i * 12;
-      const th2 = H * 0.025;
-      g.fillRect(cx - tw/2, gy - H*0.06 - (i+1)*th2, tw, th2 + 1);
+      const tw = 134 - i * 13;
+      g.fillRect(cx - tw/2, baseY - (i+1)*tierH, tw, tierH + 1);
     }
-    // Temple on summit
-    g.fillRect(cx - 14, gy - H*0.06 - tiers * H*0.025 - H*0.09, 28, H*0.09);
-    g.fillRect(cx - 16, gy - H*0.06 - tiers * H*0.025 - H*0.095, 32, 6);
-    // North staircase (central stripe up the face)
-    g.fillStyle(0x080410, 1);
-    g.fillRect(cx - 4, gy - H*0.06, 8, H*0.06 + tiers * H*0.025);
+    const templeY = baseY - tiers * tierH;
+    // Temple body
+    g.fillRect(cx - 16, templeY - H*0.10, 32, H*0.10);
+    // Temple roof comb
+    g.fillRect(cx - 18, templeY - H*0.115, 36, 7);
+
+    // Staircase stripe (centre front)
+    g.fillStyle(0x1c140e, 1);
+    g.fillRect(cx - 5, baseY - tiers*tierH, 10, tiers*tierH + H*0.07);
+
+    // Lit face (left side catches sunset)
+    g.fillStyle(0x6a4820, 0.28);
+    for (let i = 0; i < tiers; i++) {
+      const tw = 134 - i * 13;
+      g.fillRect(cx - tw/2, baseY - (i+1)*tierH, tw/2, tierH);
+    }
   }
 
   // ── 9. Angkor Wat — Khmer sunrise ───────────────────────────────────────────
   private bgAngkorWat(W: number, H: number, cx: number, gy: number): void {
-    const g = this.bgGraphics;
-    this.bgSky(0x050100, 0xff8800, 0x080300, W, H, gy);
-    const s = 0x06030a;
+    const g = this.landmarkGraphics;
+    const s = 0x2a1e0e;  // dark warm sandstone
 
-    // Moat reflection glow
-    g.fillStyle(0xff8800, 0.14);
-    g.fillRect(cx - 110, gy, 220, H*0.05);
+    // Ground
+    g.fillStyle(0x100800, 1);
+    g.fillRect(0, gy, W, H - gy);
 
+    // Moat reflection (golden shimmer)
+    g.fillStyle(0xff9900, 0.18);
+    g.fillRect(cx - 115, gy + 2, 230, H*0.06);
+
+    // Horizon glow
+    g.fillStyle(0xff8800, 0.22);
+    g.fillRect(0, gy - H*0.06, W, H*0.06);
+
+    // Outer enclosure wall
     g.fillStyle(s, 1);
-    // Outer gallery (long low wall)
-    g.fillRect(cx - 110, gy - H*0.06, 220, H*0.06);
+    g.fillRect(cx - 115, gy - H*0.07, 230, H*0.07);
 
-    // Five towers — central tallest, two pairs flanking
-    const towers: Array<[number, number]> = [
-      [cx, H*0.38],          // central (tallest)
-      [cx - 38, H*0.26],     // inner pair
-      [cx + 38, H*0.26],
-      [cx - 75, H*0.20],     // outer pair
-      [cx + 75, H*0.20],
+    // Five towers (central tallest, two pairs flanking)
+    const towerDefs: [number, number][] = [
+      [cx, H*0.40],
+      [cx - 40, H*0.28], [cx + 40, H*0.28],
+      [cx - 78, H*0.21], [cx + 78, H*0.21],
     ];
-    for (const [tx, th] of towers) {
-      // Tower body
-      g.fillRect(tx - 10, gy - th, 20, th - H*0.06);
-      // Curvilinear spire (stacked narrowing rects)
-      for (let k = 0; k < 5; k++) {
-        const w2 = 18 - k * 3;
-        g.fillRect(tx - w2/2, gy - th - k * H*0.028, w2, H*0.028 + 1);
+    for (const [tx, th] of towerDefs) {
+      // Main shaft
+      g.fillStyle(s, 1);
+      g.fillRect(tx - 11, gy - th, 22, th - H*0.07);
+      // Curvilinear prasat spire (stacked shrinking tiers)
+      for (let k = 0; k < 6; k++) {
+        const w2 = 20 - k * 3;
+        const y2 = gy - th - k * H*0.026;
+        g.fillRect(tx - w2/2, y2 - H*0.026, w2, H*0.026 + 1);
       }
-      // Finial
-      g.fillRect(tx - 2, gy - th - 5 * H*0.028 - H*0.04, 4, H*0.04);
+      // Lotus finial
+      g.fillRect(tx - 2, gy - th - 6*H*0.026 - H*0.04, 4, H*0.04);
+
+      // Lit face highlight (right side catches sunrise)
+      g.fillStyle(0x6a4820, 0.30);
+      g.fillRect(tx + 2, gy - th, 9, th - H*0.07);
     }
+
+    // Causeway / approach road
+    g.fillStyle(s, 1);
+    g.fillRect(cx - 14, gy - H*0.07, 28, H*0.07);
   }
 
   // ── 10. Stonehenge — English twilight ──────────────────────────────────────
   private bgStonehenge(W: number, H: number, cx: number, gy: number): void {
-    const g = this.bgGraphics;
-    this.bgSky(0x060810, 0x334466, 0x080a08, W, H, gy);
-    const s = 0x080a08;
+    const g = this.landmarkGraphics;
+    const s = 0x8899aa;
 
     // Flat heath
-    g.fillStyle(0x0a0d0a, 1);
+    g.fillStyle(0x2a3a2a, 1);
     g.fillRect(0, gy, W, H - gy);
     // Subtle horizon glow
-    g.fillStyle(0x223355, 0.18);
+    g.fillStyle(0x4466aa, 0.22);
     g.fillRect(0, gy - H*0.05, W, H*0.05);
 
     g.fillStyle(s, 1);

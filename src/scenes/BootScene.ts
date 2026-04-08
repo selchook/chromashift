@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { SCENES, BG_COLOR } from '../constants';
+import eiffelTowerUrl from '../assets/eiffeltower.jpg';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -7,7 +8,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Nothing to preload in boot - all assets are procedural
+    this.load.image('bg_eiffel', eiffelTowerUrl);
   }
 
   create(): void {
