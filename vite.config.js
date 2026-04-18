@@ -7,8 +7,14 @@ export default defineConfig({
     assetsDir: 'assets',
     sourcemap: false,
     minify: 'terser',
+    chunkSizeWarningLimit: 1600,
     rollupOptions: {
-      input: { main: 'index.html' }
+      input: { main: 'index.html' },
+      output: {
+        manualChunks: {
+          phaser: ['phaser']
+        }
+      }
     }
   },
   server: {
