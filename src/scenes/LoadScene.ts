@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { SCENES, BG_COLOR, HIGHLIGHT_COLOR, ACCENT_COLOR, COLORS } from '../constants';
+import { SCENES, COLORS } from '../constants';
+import { getTheme, Theme } from '../theme';
 
 export class LoadScene extends Phaser.Scene {
   private progressBar!: Phaser.GameObjects.Graphics;
@@ -8,6 +9,7 @@ export class LoadScene extends Phaser.Scene {
   private titleText!: Phaser.GameObjects.Text;
   private particles: Array<{ x: number; y: number; vx: number; vy: number; color: number; alpha: number; size: number }>;
   private particleGraphics!: Phaser.GameObjects.Graphics;
+  private theme!: Theme;
 
   constructor() {
     super({ key: SCENES.LOAD });
@@ -19,41 +21,36 @@ export class LoadScene extends Phaser.Scene {
     const cx = width / 2;
     const cy = height / 2;
 
+    this.theme = getTheme();
     this.particles = [];
-    this.cameras.main.setBackgroundColor(BG_COLOR);
+    this.cameras.main.setBackgroundColor(this.theme.bg);
 
     this.events.once('shutdown', this.cleanup, this);
     this.events.once('destroy', this.cleanup, this);
 
-    // Title
     this.titleText = this.add.text(cx, cy - 120, 'CHROMASHIFT', {
       fontSize: Math.min(width * 0.08, 52) + 'px',
       fontFamily: 'Arial Black, Arial',
-      color: '#ffffff',
-      stroke: '#e94560',
+      color: this.theme.textStr,
+      stroke: this.theme.dangerStr,
       strokeThickness: 4,
-      shadow: { offsetX: 2, offsetY: 2, color: '#e94560', blur: 8, fill: true }
+      shadow: { offsetX: 2, offsetY: 2, color: this.theme.dangerStr, blur: 8, fill: true }
     }).setOrigin(0.5);
 
-    // Loading text
     this.loadText = this.add.text(cx, cy + 60, 'Generating Assets...', {
       fontSize: '18px',
       fontFamily: 'Arial',
-      color: '#aaaaaa'
+      color: this.theme.textDimStr
     }).setOrigin(0.5);
 
-    // Progress bar background
     this.progressBg = this.add.graphics();
-    this.progressBg.fillStyle(0x333355, 1);
+    this.progressBg.fillStyle(this.theme.bgCard, 1);
     this.progressBg.fillRoundedRect(cx - 200, cy + 80, 400, 20, 10);
 
-    // Progress bar
     this.progressBar = this.add.graphics();
 
-    // Particle graphics
     this.particleGraphics = this.add.graphics();
 
-    // Initialize floating particles
     for (let i = 0; i < 20; i++) {
       this.particles.push({
         x: Math.random() * width,
@@ -66,7 +63,6 @@ export class LoadScene extends Phaser.Scene {
       });
     }
 
-    // Simulate asset generation with progress
     let progress = 0;
     const loadSteps = [
       'Initializing Grid...',
@@ -77,6 +73,7 @@ export class LoadScene extends Phaser.Scene {
       'Ready!'
     ];
     let stepIdx = 0;
+    const accent = this.theme.accent;
 
     const progressTimer = this.time.addEvent({
       delay: 120,
@@ -85,15 +82,13 @@ export class LoadScene extends Phaser.Scene {
         progress += 0.04;
         if (progress > 1) progress = 1;
 
-        // Update progress bar
         this.progressBar.clear();
-        this.progressBar.fillStyle(HIGHLIGHT_COLOR, 1);
+        this.progressBar.fillStyle(accent, 1);
         const barWidth = 396 * progress;
         if (barWidth > 0) {
           this.progressBar.fillRoundedRect(cx - 198, cy + 82, barWidth, 16, 8);
         }
 
-        // Update step text
         const stepProgress = Math.floor(progress * loadSteps.length);
         if (stepProgress < loadSteps.length && stepProgress !== stepIdx) {
           stepIdx = stepProgress;
@@ -112,7 +107,6 @@ export class LoadScene extends Phaser.Scene {
       }
     });
 
-    // Animate title
     this.tweens.add({
       targets: this.titleText,
       scaleX: 1.05,

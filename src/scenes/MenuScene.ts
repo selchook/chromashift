@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
-import { SCENES, BG_COLOR, HIGHLIGHT_COLOR, ACCENT_COLOR, COLORS, STORAGE_KEY } from '../constants';
+import { SCENES, COLORS, STORAGE_KEY } from '../constants';
 import { AudioManager } from '../managers/AudioManager';
+import { getTheme, Theme } from '../theme';
 
 export class MenuScene extends Phaser.Scene {
   private audioManager!: AudioManager;
@@ -14,6 +15,7 @@ export class MenuScene extends Phaser.Scene {
   private highScoreText!: Phaser.GameObjects.Text;
   private muteBtn!: Phaser.GameObjects.Text;
   private isTransitioning: boolean;
+  private theme!: Theme;
 
   constructor() {
     super({ key: SCENES.MENU });
@@ -27,10 +29,11 @@ export class MenuScene extends Phaser.Scene {
     const cx = width / 2;
     const cy = height / 2;
 
+    this.theme = getTheme();
     this.isTransitioning = false;
     this.bgParticles = [];
     this.titleLetters = [];
-    this.cameras.main.setBackgroundColor(BG_COLOR);
+    this.cameras.main.setBackgroundColor(this.theme.bg);
     this.cameras.main.fadeIn(600, 0, 0, 0);
 
     this.events.once('shutdown', this.cleanup, this);
@@ -45,7 +48,6 @@ export class MenuScene extends Phaser.Scene {
 
     this.bgGraphics = this.add.graphics();
 
-    this.bgParticles = [];
     for (let i = 0; i < 30; i++) {
       this.bgParticles.push({
         x: Math.random() * width,
@@ -67,7 +69,6 @@ export class MenuScene extends Phaser.Scene {
     const totalWidth = title.length * (tFontSize * 0.62);
     const startX = cx - totalWidth / 2 + (tFontSize * 0.31);
 
-    this.titleLetters = [];
     for (let i = 0; i < title.length; i++) {
       const color = COLORS[i % COLORS.length];
       const hex = '#' + color.toString(16).padStart(6, '0');
@@ -105,7 +106,7 @@ export class MenuScene extends Phaser.Scene {
     const subtitle = this.add.text(cx, cy - 150, 'Color Matching Puzzle', {
       fontSize: Math.min(width * 0.04, 20) + 'px',
       fontFamily: 'Arial',
-      color: '#aaaacc',
+      color: this.theme.textDimStr,
       alpha: 0
     } as any).setOrigin(0.5);
     this.tweens.add({ targets: subtitle, alpha: 1, duration: 600, delay: 700 });
@@ -127,7 +128,8 @@ export class MenuScene extends Phaser.Scene {
 
     this.muteBtn = this.add.text(width - 20, 20, '🔊', {
       fontSize: '24px',
-      fontFamily: 'Arial'
+      fontFamily: 'Arial',
+      color: this.theme.textStr
     }).setOrigin(1, 0).setInteractive({ useHandCursor: true });
 
     this.muteBtn.on('pointerdown', () => {
@@ -139,7 +141,7 @@ export class MenuScene extends Phaser.Scene {
     this.add.text(cx, height - 20, 'v1.0  |  Tap/Click to Match Colors', {
       fontSize: '12px',
       fontFamily: 'Arial',
-      color: '#444466'
+      color: this.theme.textMutedStr
     }).setOrigin(0.5, 1);
 
     if (this.input.keyboard) {
@@ -161,13 +163,14 @@ export class MenuScene extends Phaser.Scene {
     const container = this.add.container(x, y);
     const btnW = 220;
     const btnH = 60;
+    const accent = this.theme.accent;
 
     const shadow = this.add.graphics();
     shadow.fillStyle(0x000000, 0.4);
     shadow.fillRoundedRect(-btnW / 2 + 4, -btnH / 2 + 4, btnW, btnH, 12);
 
     const bg = this.add.graphics();
-    bg.fillStyle(HIGHLIGHT_COLOR, 1);
+    bg.fillStyle(accent, 1);
     bg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 12);
 
     const border = this.add.graphics();
@@ -177,7 +180,7 @@ export class MenuScene extends Phaser.Scene {
     const label = this.add.text(0, 0, 'PLAY', {
       fontSize: '28px',
       fontFamily: 'Arial Black, Arial',
-      color: '#ffffff',
+      color: this.theme.textStr,
       stroke: '#000000',
       strokeThickness: 2
     }).setOrigin(0.5);
@@ -196,7 +199,7 @@ export class MenuScene extends Phaser.Scene {
     container.on('pointerout', () => {
       this.tweens.add({ targets: container, scaleX: 1, scaleY: 1, duration: 100 });
       bg.clear();
-      bg.fillStyle(HIGHLIGHT_COLOR, 1);
+      bg.fillStyle(accent, 1);
       bg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 12);
     });
 
@@ -227,7 +230,7 @@ export class MenuScene extends Phaser.Scene {
       this.add.text(x, y + i * 24, text, {
         fontSize: Math.min(width * 0.032, 14) + 'px',
         fontFamily: 'Arial',
-        color: '#8888aa',
+        color: this.theme.textMutedStr,
         alpha: 0
       } as any).setOrigin(0.5).setAlpha(0);
 
