@@ -7,16 +7,19 @@ export class MenuScene extends Phaser.Scene {
   private bgParticles: Array<{
     x: number; y: number; vx: number; vy: number;
     color: number; alpha: number; size: number; rotation: number; rotSpeed: number;
-  }> = [];
+  }>;
   private bgGraphics!: Phaser.GameObjects.Graphics;
-  private titleLetters: Phaser.GameObjects.Text[] = [];
+  private titleLetters: Phaser.GameObjects.Text[];
   private playButton!: Phaser.GameObjects.Container;
   private highScoreText!: Phaser.GameObjects.Text;
   private muteBtn!: Phaser.GameObjects.Text;
-  private isTransitioning: boolean = false;
+  private isTransitioning: boolean;
 
   constructor() {
     super({ key: SCENES.MENU });
+    this.bgParticles = [];
+    this.titleLetters = [];
+    this.isTransitioning = false;
   }
 
   create(): void {
@@ -25,8 +28,13 @@ export class MenuScene extends Phaser.Scene {
     const cy = height / 2;
 
     this.isTransitioning = false;
+    this.bgParticles = [];
+    this.titleLetters = [];
     this.cameras.main.setBackgroundColor(BG_COLOR);
     this.cameras.main.fadeIn(600, 0, 0, 0);
+
+    this.events.once('shutdown', this.cleanup, this);
+    this.events.once('destroy', this.cleanup, this);
 
     if (!this.registry.get('audioManager')) {
       this.audioManager = new AudioManager();
@@ -103,7 +111,7 @@ export class MenuScene extends Phaser.Scene {
     this.tweens.add({ targets: subtitle, alpha: 1, duration: 600, delay: 700 });
 
     const highScore = localStorage.getItem(STORAGE_KEY) || '0';
-    this.highScoreText = this.add.text(cx, cy - 110, `Best Score: ${highScore}`, {
+    this.highScoreText = this.add.text(cx, cy - 110, 'Best Score: ' + highScore, {
       fontSize: Math.min(width * 0.04, 18) + 'px',
       fontFamily: 'Arial',
       color: '#FFD700',
@@ -140,6 +148,12 @@ export class MenuScene extends Phaser.Scene {
         this.muteBtn.setText(muted ? '🔇' : '🔊');
         if (!muted) this.audioManager.startMusic();
       });
+    }
+  }
+
+  private cleanup(): void {
+    if (this.input.keyboard) {
+      this.input.keyboard.removeAllListeners();
     }
   }
 

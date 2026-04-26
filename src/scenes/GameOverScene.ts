@@ -13,10 +13,15 @@ export class GameOverScene extends Phaser.Scene {
     const cx = width / 2;
     const cy = height / 2;
 
-    const state = data?.gameState || { score: 0, highScore: 0, moves: 0, level: 1 };
+    const state = (data && data.gameState)
+      ? data.gameState
+      : { score: 0, highScore: 0, moves: 0, level: 1 };
 
     this.cameras.main.setBackgroundColor(BG_COLOR);
     this.cameras.main.fadeIn(500, 0, 0, 0);
+
+    this.events.once('shutdown', this.cleanup, this);
+    this.events.once('destroy', this.cleanup, this);
 
     // Background overlay
     const bg = this.add.graphics();
@@ -47,7 +52,7 @@ export class GameOverScene extends Phaser.Scene {
       fontFamily: 'Arial',
       color: '#aaaacc'
     }).setOrigin(0.5);
-    this.add.text(cx, cy - 45, `${state.score}`, {
+    this.add.text(cx, cy - 45, '' + state.score, {
       fontSize: '40px',
       fontFamily: 'Arial Black, Arial',
       color: '#ffffff'
@@ -56,14 +61,14 @@ export class GameOverScene extends Phaser.Scene {
     // High score
     const isNew = state.score >= state.highScore && state.score > 0;
     const hsColor = isNew ? '#FFD700' : '#888888';
-    this.add.text(cx, cy + 10, isNew ? '★ NEW HIGH SCORE! ★' : `Best: ${state.highScore}`, {
+    this.add.text(cx, cy + 10, isNew ? '★ NEW HIGH SCORE! ★' : 'Best: ' + state.highScore, {
       fontSize: '16px',
       fontFamily: 'Arial',
       color: hsColor
     }).setOrigin(0.5);
 
     // Moves
-    this.add.text(cx, cy + 45, `Moves used: ${state.moves}`, {
+    this.add.text(cx, cy + 45, 'Moves used: ' + state.moves, {
       fontSize: '14px',
       fontFamily: 'Arial',
       color: '#aaaacc'
@@ -125,6 +130,12 @@ export class GameOverScene extends Phaser.Scene {
     if (this.input.keyboard) {
       this.input.keyboard.on('keydown-R', () => this.scene.start(SCENES.GAME));
       this.input.keyboard.on('keydown-ESC', () => this.scene.start(SCENES.MENU));
+    }
+  }
+
+  private cleanup(): void {
+    if (this.input.keyboard) {
+      this.input.keyboard.removeAllListeners();
     }
   }
 }

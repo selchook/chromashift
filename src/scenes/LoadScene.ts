@@ -6,11 +6,12 @@ export class LoadScene extends Phaser.Scene {
   private progressBg!: Phaser.GameObjects.Graphics;
   private loadText!: Phaser.GameObjects.Text;
   private titleText!: Phaser.GameObjects.Text;
-  private particles: Array<{ x: number; y: number; vx: number; vy: number; color: number; alpha: number; size: number }> = [];
+  private particles: Array<{ x: number; y: number; vx: number; vy: number; color: number; alpha: number; size: number }>;
   private particleGraphics!: Phaser.GameObjects.Graphics;
 
   constructor() {
     super({ key: SCENES.LOAD });
+    this.particles = [];
   }
 
   create(): void {
@@ -18,7 +19,11 @@ export class LoadScene extends Phaser.Scene {
     const cx = width / 2;
     const cy = height / 2;
 
+    this.particles = [];
     this.cameras.main.setBackgroundColor(BG_COLOR);
+
+    this.events.once('shutdown', this.cleanup, this);
+    this.events.once('destroy', this.cleanup, this);
 
     // Title
     this.titleText = this.add.text(cx, cy - 120, 'CHROMASHIFT', {
@@ -134,5 +139,9 @@ export class LoadScene extends Phaser.Scene {
       this.particleGraphics.fillStyle(p.color, p.alpha);
       this.particleGraphics.fillCircle(p.x, p.y, p.size);
     }
+  }
+
+  private cleanup(): void {
+    this.particles = [];
   }
 }
