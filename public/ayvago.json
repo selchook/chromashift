@@ -1,0 +1,56 @@
+{
+  "$schema": "https://ayvago.com/schemas/manifest.v1.json",
+  "id": "chromashift",
+  "title": {
+    "en": "ChromaShift",
+    "tr": "ChromaShift"
+  },
+  "description": {
+    "en": "Drag, rotate and lock colored shards onto a 7×7 grid. Chain three or more of a color before the board fills up.",
+    "tr": "Renkli parçaları 7×7 ızgaraya sürükle, döndür ve yerleştir. Tahta dolmadan aynı renkten en az üçünü zincirle."
+  },
+  "category": "puzzle",
+  "tags": [
+    "color",
+    "grid",
+    "chain"
+  ],
+  "entry": "https://chromashift-theta.vercel.app/",
+  "orientation": "portrait",
+  "input": [
+    "touch",
+    "mouse"
+  ],
+  "players": {
+    "min": 1,
+    "max": 1
+  },
+  "scoring": {
+    "metric": "points",
+    "order": "desc",
+    "format": "number",
+    "label": {
+      "en": "Score",
+      "tr": "Puan"
+    },
+    "minDurationMs": 5000,
+    "maxPerSecond": 300,
+    "maxScore": 10000000
+  },
+  "ads": {
+    "rewarded": [
+      "continue",
+      "hint"
+    ],
+    "interstitial": [
+      "game_over"
+    ]
+  },
+  "ageRating": "3+",
+  "sdkVersion": 2,
+  "assets": {
+    "icon": "/ayvago/icon-512.png",
+    "cover": "/ayvago/cover-1920x1080.jpg"
+  },
+  "version": "1.0.0"
+}

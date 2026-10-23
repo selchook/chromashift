@@ -5,6 +5,7 @@ import {
   COMBO_MULTIPLIER, STORAGE_KEY, CHROMASHIFT_INTERVAL
 } from '../constants';
 import { AudioManager } from '../managers/AudioManager';
+import { onPlatform } from '../ayvago/platform';
 import { TileData, GameState } from '../types';
 
 export class GameScene extends Phaser.Scene {
@@ -25,6 +26,8 @@ export class GameScene extends Phaser.Scene {
     color: number; alpha: number; size: number; life: number; maxLife: number;
   }> = [];
   private totalClears: number = 0;
+  // High score when this run started, to detect a new personal best at game over.
+  private startingHighScore = 0;
   private paletteShift: number = 0;
   private gridOffsetX: number = 0;
   private gridOffsetY: number = 0;
@@ -63,6 +66,8 @@ export class GameScene extends Phaser.Scene {
       highScore: parseInt(localStorage.getItem(STORAGE_KEY) || '0'),
       combo: 0, isGameOver: false
     };
+    this.startingHighScore = this.gameState.highScore;
+    onPlatform((p) => p.gameplayStart());
 
     this.isResolving = false;
     this.selectedTile = null;
@@ -871,6 +876,13 @@ export class GameScene extends Phaser.Scene {
   private endGame(): void {
     if (this.gameState.isGameOver) return;
     this.gameState.isGameOver = true;
+    const finalScore = this.gameState.score;
+    const newBest = finalScore > this.startingHighScore;
+    onPlatform((p) => {
+      p.gameplayStop();
+      p.endGame({ score: finalScore, won: false });
+      if (newBest) p.celebrate();
+    });
     this.audioManager.playGameOver();
     this.audioManager.stopMusic();
     this.cameras.main.fadeOut(600, 0, 0, 0);

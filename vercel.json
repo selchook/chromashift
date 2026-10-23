@@ -9,12 +9,16 @@
       "source": "/(.*)",
       "headers": [
         {
-          "key": "X-Frame-Options",
-          "value": "SAMEORIGIN"
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors 'self' https://ayvago.com https://www.ayvago.com http://localhost:3000"
         },
         {
           "key": "Cross-Origin-Opener-Policy",
           "value": "same-origin"
+        },
+        {
+          "key": "Cross-Origin-Resource-Policy",
+          "value": "cross-origin"
         }
       ]
     },
