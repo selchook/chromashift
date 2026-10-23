@@ -1,5 +1,15 @@
 import { AudioConfig } from '../types';
 
+// Silence requested by the hosting platform (Ayvago mute button or paused game). Kept separate
+// from the player's own mute toggle so neither overrides the other.
+const platformSilence = { muted: false, paused: false };
+const instances = new Set<AudioManager>();
+
+export function setPlatformAudio(state: { muted?: boolean; paused?: boolean }): void {
+  Object.assign(platformSilence, state);
+  instances.forEach((manager) => manager.applyVolume());
+}
+
 export class AudioManager {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
@@ -21,13 +31,24 @@ export class AudioManager {
 
   constructor() {
     this.config.muted = false;
+    instances.add(this);
+  }
+
+  private isSilent(): boolean {
+    return this.config.muted || platformSilence.muted || platformSilence.paused;
+  }
+
+  applyVolume(): void {
+    if (this.masterGain) {
+      this.masterGain.gain.value = this.isSilent() ? 0 : this.config.volume;
+    }
   }
 
   private ensureContext(): void {
     if (!this.ctx) {
       this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
       this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.value = this.config.muted ? 0 : this.config.volume;
+      this.masterGain.gain.value = this.isSilent() ? 0 : this.config.volume;
       this.masterGain.connect(this.ctx.destination);
 
       this.musicGain = this.ctx.createGain();
@@ -103,7 +124,7 @@ export class AudioManager {
 
   private playTone(freq: number, type: OscillatorType, gain: number, duration: number): void {
     this.ensureContext();
-    if (!this.ctx || !this.sfxGain || this.config.muted) return;
+    if (!this.ctx || !this.sfxGain || this.isSilent()) return;
     const osc = this.ctx.createOscillator();
     const gainNode = this.ctx.createGain();
     osc.type = type;
@@ -131,7 +152,7 @@ export class AudioManager {
     const gainNode = this.ctx.createGain();
     osc.type = 'sine';
     osc.frequency.value = freq;
-    gainNode.gain.setValueAtTime(this.config.muted ? 0 : 0.08, this.ctx.currentTime);
+    gainNode.gain.setValueAtTime(this.isSilent() ? 0 : 0.08, this.ctx.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.35);
     osc.connect(gainNode);
     gainNode.connect(this.musicGain);
@@ -151,9 +172,7 @@ export class AudioManager {
 
   toggleMute(): boolean {
     this.config.muted = !this.config.muted;
-    if (this.masterGain) {
-      this.masterGain.gain.value = this.config.muted ? 0 : this.config.volume;
-    }
+    this.applyVolume();
     return this.config.muted;
   }
 
@@ -162,6 +181,7 @@ export class AudioManager {
   }
 
   destroy(): void {
+    instances.delete(this);
     this.stopMusic();
     if (this.ctx) {
       this.ctx.close();

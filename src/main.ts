@@ -5,6 +5,8 @@ import { MenuScene } from './scenes/MenuScene';
 import { GameScene } from './scenes/GameScene';
 import { HUDScene } from './scenes/HUDScene';
 import { GameOverScene } from './scenes/GameOverScene';
+import { setPlatformAudio } from './managers/AudioManager';
+import { onPlatform } from './ayvago/platform';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -17,4 +19,17 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [BootScene, LoadScene, MenuScene, GameScene, HUDScene, GameOverScene]
 };
 
-new Phaser.Game(config);
+const game = new Phaser.Game(config);
+
+// Inside Ayvago the platform pauses the game when its tab is hidden and can mute it.
+onPlatform((platform) => {
+  platform.onPause(() => {
+    game.loop.sleep();
+    setPlatformAudio({ paused: true });
+  });
+  platform.onResume(() => {
+    game.loop.wake();
+    setPlatformAudio({ paused: false });
+  });
+  platform.onMute((muted) => setPlatformAudio({ muted }));
+});
