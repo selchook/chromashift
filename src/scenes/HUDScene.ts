@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { SCENES, BG_COLOR, HIGHLIGHT_COLOR, COLORS, GAME_WIDTH } from '../constants';
+import { SCENES } from '../constants';
 import { GameState } from '../types';
 
 export class HUDScene extends Phaser.Scene {
@@ -14,7 +14,7 @@ export class HUDScene extends Phaser.Scene {
   }
 
   create(): void {
-    const cx = GAME_WIDTH / 2;
+    const cx = this.scale.width / 2;
     const right = this.scale.width - 16;
 
     // Score
@@ -51,6 +51,16 @@ export class HUDScene extends Phaser.Scene {
       fontFamily: 'Arial Black, Arial',
       color: '#ff6b7a'
     }).setOrigin(0.5, 0).setAlpha(0);
+
+    // Keep the right-hand and centred texts in place when the screen is resized or rotated.
+    const onResize = () => {
+      const r = this.scale.width - 16;
+      this.scoreText.setX(r);
+      this.highScoreText.setX(r);
+      this.comboText.setX(this.scale.width / 2);
+    };
+    this.scale.on('resize', onResize);
+    this.events.once('shutdown', () => this.scale.off('resize', onResize));
 
     this.events.on('updateState', (state: GameState) => {
       this.scoreText.setText(`Score: ${state.score}`);
