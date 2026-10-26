@@ -29,8 +29,16 @@ export class GameScene extends Phaser.Scene {
   // High score when this run started, to detect a new personal best at game over.
   private startingHighScore = 0;
   private paletteShift: number = 0;
+  // The board is drawn in its own coordinate space (CELL_SIZE units, origin at the top-left cell)
+  // inside three containers that are scaled and centred to fit the screen: board slots below the
+  // tiles, the tiles, then selection and particles on top. Tweens and hit-testing stay in board
+  // units, and a resize only moves and rescales the containers.
   private gridOffsetX: number = 0;
   private gridOffsetY: number = 0;
+  private boardBack!: Phaser.GameObjects.Container;
+  private tileLayer!: Phaser.GameObjects.Container;
+  private boardFront!: Phaser.GameObjects.Container;
+  private boardScale: number = 1;
   private bgGraphics!: Phaser.GameObjects.Graphics;
   private landmarkGraphics!: Phaser.GameObjects.Graphics;
   private bgImage?: Phaser.GameObjects.Image;
@@ -48,10 +56,43 @@ export class GameScene extends Phaser.Scene {
     return this.gridOffsetY + row * CELL_SIZE + CELL_SIZE / 2;
   }
 
-  create(): void {
+  /**
+   * Fits the board to the screen: as large as possible below the HUD and above the location
+   * caption, between 24 and 60 px per cell (48 is the design size).
+   */
+  private layoutBoard(): void {
+    const { width, height } = this.scale;
     const HUD_HEIGHT = 80;
-    this.gridOffsetX = Math.floor((this.scale.width - GRID_COLS * CELL_SIZE) / 2);
-    this.gridOffsetY = HUD_HEIGHT + Math.max(0, Math.floor((this.scale.height - HUD_HEIGHT - GRID_ROWS * CELL_SIZE) / 2));
+    const BOTTOM = 26;
+    const SIDE = 10;
+    const boardW = GRID_COLS * CELL_SIZE + 8;
+    const boardH = GRID_ROWS * CELL_SIZE + 8;
+    const fit = Math.min((width - SIDE * 2) / boardW, (height - HUD_HEIGHT - BOTTOM) / boardH);
+    const scale = Phaser.Math.Clamp(fit, 24 / CELL_SIZE, 60 / CELL_SIZE);
+    const x = Math.round((width - GRID_COLS * CELL_SIZE * scale) / 2);
+    const free = height - HUD_HEIGHT - BOTTOM - boardH * scale;
+    const y = Math.round(HUD_HEIGHT + 4 * scale + Math.max(0, free / 2));
+    this.boardScale = scale;
+    for (const layer of [this.boardBack, this.tileLayer, this.boardFront]) {
+      layer.setPosition(x, y).setScale(scale);
+    }
+  }
+
+  /** Screen point → board coordinates (CELL_SIZE units). */
+  private toBoard(px: number, py: number): { x: number; y: number } {
+    return {
+      x: (px - this.tileLayer.x) / this.boardScale,
+      y: (py - this.tileLayer.y) / this.boardScale
+    };
+  }
+
+  private onResize(): void {
+    this.layoutBoard();
+    this.drawBackground(this.gameState.level);
+    this.locationText.setPosition(this.scale.width / 2, this.scale.height - 14);
+  }
+
+  create(): void {
 
     this.cameras.main.setBackgroundColor(BG_COLOR);
     this.cameras.main.fadeIn(400, 0, 0, 0);
@@ -78,9 +119,15 @@ export class GameScene extends Phaser.Scene {
     // Layer order via depth
     this.bgGraphics      = this.add.graphics().setDepth(-5);
     this.landmarkGraphics = this.add.graphics().setDepth(-3);
-    this.gridGraphics = this.add.graphics().setDepth(0);
-    this.selectionGraphics = this.add.graphics().setDepth(20);
-    this.particleGraphics = this.add.graphics().setDepth(30);
+    this.gridGraphics = this.add.graphics();
+    this.selectionGraphics = this.add.graphics();
+    this.particleGraphics = this.add.graphics();
+    this.boardBack = this.add.container(0, 0, [this.gridGraphics]).setDepth(0);
+    this.tileLayer = this.add.container(0, 0).setDepth(10);
+    this.boardFront = this.add.container(0, 0, [this.selectionGraphics, this.particleGraphics]).setDepth(20);
+    this.layoutBoard();
+    this.scale.on('resize', this.onResize, this);
+    this.events.once('shutdown', () => this.scale.off('resize', this.onResize, this));
 
     this.locationText = this.add.text(this.scale.width / 2, this.scale.height - 14, '', {
       fontSize: '11px', fontFamily: 'Arial', color: '#ffffff'
@@ -92,13 +139,15 @@ export class GameScene extends Phaser.Scene {
     this.dropInAllTiles();
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      this.pointerDownX = pointer.x;
-      this.pointerDownY = pointer.y;
-      this.handlePointerDown(pointer.x, pointer.y);
+      const p = this.toBoard(pointer.x, pointer.y);
+      this.pointerDownX = p.x;
+      this.pointerDownY = p.y;
+      this.handlePointerDown(p.x, p.y);
     });
 
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
-      this.handlePointerUp(pointer.x, pointer.y);
+      const p = this.toBoard(pointer.x, pointer.y);
+      this.handlePointerUp(p.x, p.y);
     });
 
     if (this.input.keyboard) {
@@ -395,7 +444,7 @@ export class GameScene extends Phaser.Scene {
     const g = this.buildTileGraphics(tile.colorIndex);
     const container = this.add.container(tx, ty, [g]);
     container.setSize(CELL_SIZE - 4, CELL_SIZE - 4);
-    container.setDepth(10);
+    this.tileLayer.add(container);
     return container;
   }
 

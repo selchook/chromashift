@@ -43,9 +43,11 @@ export class LoadScene extends Phaser.Scene {
       color: this.theme.textDimStr
     }).setOrigin(0.5);
 
+    // 400 px wide, or narrower on small screens.
+    const barW = Math.min(400, width - 40);
     this.progressBg = this.add.graphics();
     this.progressBg.fillStyle(this.theme.bgCard, 1);
-    this.progressBg.fillRoundedRect(cx - 200, cy + 80, 400, 20, 10);
+    this.progressBg.fillRoundedRect(cx - barW / 2, cy + 80, barW, 20, 10);
 
     this.progressBar = this.add.graphics();
 
@@ -84,9 +86,9 @@ export class LoadScene extends Phaser.Scene {
 
         this.progressBar.clear();
         this.progressBar.fillStyle(accent, 1);
-        const barWidth = 396 * progress;
+        const barWidth = (barW - 4) * progress;
         if (barWidth > 0) {
-          this.progressBar.fillRoundedRect(cx - 198, cy + 82, barWidth, 16, 8);
+          this.progressBar.fillRoundedRect(cx - barW / 2 + 2, cy + 82, barWidth, 16, 8);
         }
 
         const stepProgress = Math.floor(progress * loadSteps.length);

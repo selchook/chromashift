@@ -24,7 +24,7 @@ Boot → Load → Menu → Game ──scene.launch()──► HUD  (parallel ove
                └──────── GameOver ◄─────────────┘  (HUD stopped before transition)
 ```
 
-Scenes are registered in order in `src/main.ts`. `Phaser.Scale.RESIZE` mode is active — the canvas fills the full viewport; all scenes derive layout from `this.scale.width / height` at `create()` time.
+Scenes are registered in order in `src/main.ts`. `Phaser.Scale.RESIZE` mode is active — the canvas fills the full viewport; all scenes derive layout from `this.scale.width / height` at `create()` time and react to resizes (phone rotation, the Ayvago player changing size). `main.ts` also re-reads the parent size 250 ms after a window resize, because Phaser's orientation and resize handlers can race and leave the canvas at the old size.
 
 ### Key Files
 
@@ -39,9 +39,9 @@ Scenes are registered in order in `src/main.ts`. `Phaser.Scale.RESIZE` mode is a
 
 `GameScene` owns all game logic. Critical design decisions:
 
-- **Grid offsets are computed at `create()` time** (`this.gridOffsetX`, `this.gridOffsetY`), not from constants, so the grid centers correctly in any viewport. The constants `GRID_OFFSET_X`/`GRID_OFFSET_Y` in `constants.ts` are kept only for `HUDScene`'s reference.
+- **The board lives in its own coordinate space**: CELL_SIZE (48) units with the origin at the top-left cell (`gridOffsetX/Y` are 0). Three containers hold it: `boardBack` (slots), `tileLayer` (tile containers) and `boardFront` (selection, particles). `layoutBoard()` scales and centres them to fit below the HUD (24–60 px per cell) and runs again on every resize. Pointer positions go through `toBoard()`. Tweens keep using board units and absolute tile scales (1, 1.14, …), so they are unaffected by the board scale.
 - **`buildTileGraphics(colorIndex)`** is the single function that draws tiles. It is called both at spawn time and on `refreshTileVisual()` after a Chromashift palette rotation. Tile graphics live inside `Phaser.GameObjects.Container`s stored in `tileContainers[row][col]`.
-- **Input dual-mode:** `pointerdown` records position and handles tap-select; `pointerup` compares displacement — if ≥ 20 px it's treated as a directional swipe, otherwise the tap is used.
+- **Input dual-mode:** `pointerdown` records position and handles tap-select; `pointerup` compares displacement — if ≥ 20 board units (about 17–25 px) it's treated as a directional swipe, otherwise the tap is used.
 - **Match/resolve loop:** `findAllMatches()` → `resolveMatches()` → `afterMatchDestroy()` → gravity → `spawnNewTiles()` → cascade check. The `isResolving` flag blocks all input during this chain.
 - **Chromashift:** every `CHROMASHIFT_INTERVAL` tile clears, `paletteShift` increments, which rotates the color array index for all tiles.
 
@@ -60,9 +60,10 @@ Always `scene.stop(SCENES.HUD)` before `scene.restart()` or transitioning away f
 ### Layout conventions
 
 - All scene content positions derive from `const { width, height } = this.scale` at `create()` start.
-- HUDScene is the exception: score anchors to `this.scale.width - 16` (right edge), moves/level anchor to `x = 20` (left edge).
+- MenuScene squeezes its vertical spacing by `k = min(1, height / 640)` and places the title letters by their measured widths. Menu and GameOver restart themselves (deferred) when the size changes. GameOver scales its panel to fit.
+- HUDScene: score anchors to `this.scale.width - 16` (right edge), moves/level anchor to `x = 20` (left edge); the right and centred texts move on resize.
 - Tile rendering uses container-local coordinates centered at `(0, 0)` — tile rect spans `±(CELL_SIZE/2 - pad)`.
 
 ### Deployment
 
-`vercel.json` is configured for Vite. `npm run build` outputs to `dist/`. The `index.html` entry point contains markdown code fences on line 1 (artifact from generation) — browsers tolerate this but do not remove them without verifying the page still renders correctly.
+`vercel.json` is configured for Vite. `npm run build` outputs to `dist/`. (The markdown code fences that `index.html` once had around it were removed; they showed up as text on top of the game.)

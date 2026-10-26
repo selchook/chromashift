@@ -134,6 +134,28 @@ export class GameOverScene extends Phaser.Scene {
       });
     });
 
+    // Fit the panel on small screens: everything but the backdrop moves into one container,
+    // centred and scaled down when the panel (320 × 360 plus its menu link) does not fit.
+    const ui = this.add.container(cx, cy);
+    for (const obj of [...this.children.list]) {
+      if (obj === bg || obj === ui) continue;
+      const item = obj as Phaser.GameObjects.Components.Transform & Phaser.GameObjects.GameObject;
+      item.x -= cx;
+      item.y -= cy;
+      ui.add(item);
+    }
+    ui.setScale(Math.min(1, (width - 24) / panelW, (height - 24) / (panelH + 40)));
+
+    // Lay the screen out again after a resize or rotation, once the size has settled (never from
+    // inside the resize event itself).
+    const onResize = (size: Phaser.Structs.Size) => {
+      if (size.width === width && size.height === height) return;
+      this.scale.off('resize', onResize);
+      this.time.delayedCall(150, () => this.scene.restart(data));
+    };
+    this.scale.on('resize', onResize);
+    this.events.once('shutdown', () => this.scale.off('resize', onResize));
+
     // Keyboard
     if (this.input.keyboard) {
       this.input.keyboard.on('keydown-R', () => this.scene.start(SCENES.GAME));

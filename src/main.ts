@@ -21,6 +21,17 @@ const config: Phaser.Types.Core.GameConfig = {
 
 const game = new Phaser.Game(config);
 
+// Safety net for phone rotation: Phaser's orientation and resize handlers can race and leave the
+// canvas at the old size. Shortly after the window settles, re-read the parent size and refresh.
+let resizeTimer = 0;
+window.addEventListener('resize', () => {
+  window.clearTimeout(resizeTimer);
+  resizeTimer = window.setTimeout(() => {
+    game.scale.getParentBounds();
+    game.scale.refresh();
+  }, 250);
+});
+
 // Inside Ayvago the platform pauses the game when its tab is hidden and can mute it.
 onPlatform((platform) => {
   platform.onPause(() => {

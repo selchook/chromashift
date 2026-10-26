@@ -28,6 +28,9 @@ export class MenuScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const cx = width / 2;
     const cy = height / 2;
+    // The menu is designed for 640 px of height; shorter screens (phones in landscape, a small
+    // embedded player) squeeze the vertical spacing and the button.
+    const k = Math.min(1, height / 640);
 
     this.theme = getTheme();
     this.isTransitioning = false;
@@ -62,30 +65,39 @@ export class MenuScene extends Phaser.Scene {
       });
     }
 
-    this.drawDecorativeGrid(cx, cy - 20, width, height);
+    if (k >= 0.8) this.drawDecorativeGrid(cx, cy - 20, width, height);
 
     const title = 'CHROMASHIFT';
-    const tFontSize = Math.min(width * 0.085, 58);
-    const totalWidth = title.length * (tFontSize * 0.62);
-    const startX = cx - totalWidth / 2 + (tFontSize * 0.31);
+    const tFontSize = Math.min(width * 0.085, 58, 58 * k);
+    const titleY = cy - 210 * k;
 
-    for (let i = 0; i < title.length; i++) {
+    // Letters are placed by their measured widths, so the title stays even with whatever font the
+    // device substitutes for Arial Black (most phones have none).
+    const letters = [...title].map((char, i) => {
       const color = COLORS[i % COLORS.length];
       const hex = '#' + color.toString(16).padStart(6, '0');
-      const letter = this.add.text(startX + i * (tFontSize * 0.62), cy - 200, title[i], {
+      return this.add.text(0, titleY + 10 * k, char, {
         fontSize: tFontSize + 'px',
         fontFamily: 'Arial Black, Arial',
+        fontStyle: 'bold',
         color: hex,
         stroke: '#000000',
         strokeThickness: 3
       }).setOrigin(0.5).setAlpha(0);
+    });
+    const spacing = tFontSize * 0.04;
+    const totalWidth = letters.reduce((sum, l) => sum + l.width, 0) + spacing * (letters.length - 1);
+    let nextX = cx - totalWidth / 2;
+    letters.forEach((letter, i) => {
+      letter.setX(nextX + letter.width / 2);
+      nextX += letter.width + spacing;
 
       this.titleLetters.push(letter);
 
       this.tweens.add({
         targets: letter,
         alpha: 1,
-        y: cy - 210,
+        y: titleY,
         duration: 400,
         delay: i * 60,
         ease: 'Back.easeOut'
@@ -94,16 +106,16 @@ export class MenuScene extends Phaser.Scene {
       this.time.delayedCall(i * 60 + 400, () => {
         this.tweens.add({
           targets: letter,
-          y: cy - 215,
+          y: titleY - 5 * k,
           duration: 1200 + i * 80,
           yoyo: true,
           repeat: -1,
           ease: 'Sine.easeInOut'
         });
       });
-    }
+    });
 
-    const subtitle = this.add.text(cx, cy - 150, 'Color Matching Puzzle', {
+    const subtitle = this.add.text(cx, cy - 150 * k, 'Color Matching Puzzle', {
       fontSize: Math.min(width * 0.04, 20) + 'px',
       fontFamily: 'Arial',
       color: this.theme.textDimStr,
@@ -112,7 +124,7 @@ export class MenuScene extends Phaser.Scene {
     this.tweens.add({ targets: subtitle, alpha: 1, duration: 600, delay: 700 });
 
     const highScore = localStorage.getItem(STORAGE_KEY) || '0';
-    this.highScoreText = this.add.text(cx, cy - 110, 'Best Score: ' + highScore, {
+    this.highScoreText = this.add.text(cx, cy - 110 * k, 'Best Score: ' + highScore, {
       fontSize: Math.min(width * 0.04, 18) + 'px',
       fontFamily: 'Arial',
       color: '#FFD700',
@@ -120,11 +132,11 @@ export class MenuScene extends Phaser.Scene {
     } as any).setOrigin(0.5);
     this.tweens.add({ targets: this.highScoreText, alpha: 1, duration: 600, delay: 900 });
 
-    this.playButton = this.createPlayButton(cx, cy + 30);
+    this.playButton = this.createPlayButton(cx, cy + 30 * k, Math.min(1, k * 1.1, (width - 40) / 220));
     this.playButton.setAlpha(0);
-    this.tweens.add({ targets: this.playButton, alpha: 1, y: cy + 40, duration: 600, delay: 1000, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: this.playButton, alpha: 1, y: cy + 40 * k, duration: 600, delay: 1000, ease: 'Back.easeOut' });
 
-    this.createHowToPlay(cx, cy + 140, width);
+    if (k >= 0.7) this.createHowToPlay(cx, cy + 140 * k, width);
 
     this.muteBtn = this.add.text(width - 20, 20, '🔊', {
       fontSize: '24px',
@@ -144,6 +156,16 @@ export class MenuScene extends Phaser.Scene {
       color: this.theme.textMutedStr
     }).setOrigin(0.5, 1);
 
+    // Lay the screen out again after a resize or rotation, once the size has settled (never from
+    // inside the resize event itself).
+    const onResize = (size: Phaser.Structs.Size) => {
+      if (size.width === width && size.height === height) return;
+      this.scale.off('resize', onResize);
+      this.time.delayedCall(150, () => this.scene.restart());
+    };
+    this.scale.on('resize', onResize);
+    this.events.once('shutdown', () => this.scale.off('resize', onResize));
+
     if (this.input.keyboard) {
       this.input.keyboard.on('keydown-M', () => {
         const muted = this.audioManager.toggleMute();
@@ -159,8 +181,8 @@ export class MenuScene extends Phaser.Scene {
     }
   }
 
-  private createPlayButton(x: number, y: number): Phaser.GameObjects.Container {
-    const container = this.add.container(x, y);
+  private createPlayButton(x: number, y: number, base = 1): Phaser.GameObjects.Container {
+    const container = this.add.container(x, y).setScale(base);
     const btnW = 220;
     const btnH = 60;
     const accent = this.theme.accent;
@@ -190,14 +212,14 @@ export class MenuScene extends Phaser.Scene {
     container.setInteractive({ useHandCursor: true });
 
     container.on('pointerover', () => {
-      this.tweens.add({ targets: container, scaleX: 1.05, scaleY: 1.05, duration: 100 });
+      this.tweens.add({ targets: container, scaleX: base * 1.05, scaleY: base * 1.05, duration: 100 });
       bg.clear();
       bg.fillStyle(0xff6b7a, 1);
       bg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 12);
     });
 
     container.on('pointerout', () => {
-      this.tweens.add({ targets: container, scaleX: 1, scaleY: 1, duration: 100 });
+      this.tweens.add({ targets: container, scaleX: base, scaleY: base, duration: 100 });
       bg.clear();
       bg.fillStyle(accent, 1);
       bg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 12);
@@ -207,7 +229,7 @@ export class MenuScene extends Phaser.Scene {
       if (this.isTransitioning) return;
       this.isTransitioning = true;
       this.audioManager.playTileSelect();
-      this.tweens.add({ targets: container, scaleX: 0.95, scaleY: 0.95, duration: 80, yoyo: true });
+      this.tweens.add({ targets: container, scaleX: base * 0.95, scaleY: base * 0.95, duration: 80, yoyo: true });
       this.time.delayedCall(200, () => {
         this.cameras.main.fadeOut(400, 0, 0, 0);
         this.cameras.main.once('camerafadeoutcomplete', () => {
